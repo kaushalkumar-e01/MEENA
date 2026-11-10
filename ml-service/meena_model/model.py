@@ -177,22 +177,30 @@ class MeenaEvolvedTransformer(nn.Module):
         self,
         src_tokens: torch.Tensor,
         max_new_tokens: int = 64,
+        min_new_tokens: int = 3,
         temperature: float = 0.7,
         top_k: int = 40,
         top_p: float = 0.9,
+        repetition_penalty: float = 1.35,
+        no_repeat_ngram_size: int = 3,
         bos_token_id: Optional[int] = None,
         eos_token_id: Optional[int] = None,
         pad_token_id: Optional[int] = None,
+        unk_token_id: Optional[int] = None,
         src_key_padding_mask: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         """
-        Autoregressive generation supporting Temperature, Top-K, and Top-P (Nucleus) sampling.
+        Autoregressive generation supporting Temperature, Top-K, Top-P (Nucleus) sampling,
+        Repetition Penalty, N-gram blocking, and min token constraints.
         Args:
             src_tokens: [batch_size, src_len] or [1, src_len]
             max_new_tokens: Maximum number of tokens to generate
+            min_new_tokens: Minimum tokens before allowing EOS
             temperature: Sampling temperature (> 0.0)
             top_k: Top-K filtering (0 to disable)
             top_p: Top-P nucleus filtering (1.0 to disable)
+            repetition_penalty: Penalty factor (> 1.0) applied to previously generated tokens
+            no_repeat_ngram_size: Prevents identical n-grams from repeating
         Returns:
             generated_tokens: [batch_size, generated_seq_len] including BOS
         """
@@ -203,6 +211,7 @@ class MeenaEvolvedTransformer(nn.Module):
         bos_id = bos_token_id if bos_token_id is not None else self.config.bos_token_id
         eos_id = eos_token_id if eos_token_id is not None else self.config.eos_token_id
         pad_id = pad_token_id if pad_token_id is not None else self.config.pad_token_id
+        unk_id = unk_token_id if unk_token_id is not None else self.config.unk_token_id
 
         # 1. Encode source prompt once
         memory = self.encode(src_tokens, src_key_padding_mask=src_key_padding_mask)
@@ -215,7 +224,7 @@ class MeenaEvolvedTransformer(nn.Module):
         finished = torch.zeros(bsz, dtype=torch.bool, device=device)
 
         # 3. Autoregressive decoding loop
-        for _ in range(max_new_tokens):
+        for step in range(max_new_tokens):
             # Generate causal mask for current target sequence length
             curr_len = generated.size(1)
             tgt_mask = self.decoder.generate_square_subsequent_mask(curr_len, device=device)
@@ -231,6 +240,43 @@ class MeenaEvolvedTransformer(nn.Module):
 
             # Logits for the latest position only: [batch_size, vocab_size]
             next_token_logits = self.output_projection(hidden[:, -1, :])
+
+            # Suppress pad, bos, and unk from being sampled
+            if pad_id is not None:
+                next_token_logits[:, pad_id] = -float("Inf")
+            if bos_id is not None:
+                next_token_logits[:, bos_id] = -float("Inf")
+            if unk_id is not None:
+                next_token_logits[:, unk_id] = -float("Inf")
+
+            # Min new tokens: suppress EOS before minimum length
+            if step < min_new_tokens and eos_id is not None:
+                next_token_logits[:, eos_id] = -float("Inf")
+
+            # Apply frequency-aware repetition penalty
+            if repetition_penalty > 1.0:
+                for i in range(bsz):
+                    gen_list = generated[i].tolist()
+                    tok_counts = {}
+                    for tok_id in gen_list:
+                        tok_counts[tok_id] = tok_counts.get(tok_id, 0) + 1
+                    for tok_id, count in tok_counts.items():
+                        # Compound penalty for tokens that have appeared repeatedly
+                        penalty = repetition_penalty ** min(count, 3)
+                        if next_token_logits[i, tok_id] > 0:
+                            next_token_logits[i, tok_id] /= penalty
+                        else:
+                            next_token_logits[i, tok_id] *= penalty
+
+            # Apply No-Repeat N-Gram blocking
+            if no_repeat_ngram_size > 0 and curr_len >= no_repeat_ngram_size:
+                for i in range(bsz):
+                    gen_list = generated[i].tolist()
+                    ngram_prefix = tuple(gen_list[-(no_repeat_ngram_size - 1):])
+                    for j in range(len(gen_list) - no_repeat_ngram_size + 1):
+                        if tuple(gen_list[j:j + no_repeat_ngram_size - 1]) == ngram_prefix:
+                            forbidden = gen_list[j + no_repeat_ngram_size - 1]
+                            next_token_logits[i, forbidden] = -float("Inf")
 
             # Apply temperature
             if temperature > 0:
@@ -248,7 +294,6 @@ class MeenaEvolvedTransformer(nn.Module):
 
                     # Remove tokens with cumulative probability above top_p
                     sorted_indices_to_remove = cumulative_probs > top_p
-                    # Shift the indices to keep at least the first token
                     sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
                     sorted_indices_to_remove[..., 0] = 0
 

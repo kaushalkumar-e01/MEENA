@@ -61,20 +61,26 @@ export async function POST(req: Request) {
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
+      if (!data.session || !data.user) {
+        return NextResponse.json(
+          { error: 'Supabase authentication failed. No active session established.' },
+          { status: 401 }
+        );
+      }
       const sbUser = data.user;
       const user = {
-        id: sbUser?.id || `usr_${Date.now()}`,
-        name: name || sbUser?.user_metadata?.name || identifier.split('@')[0],
+        id: sbUser.id,
+        name: name || sbUser.user_metadata?.name || identifier.split('@')[0],
         username: identifier.split('@')[0],
-        email: identifier.toLowerCase(),
+        email: sbUser.email || identifier.toLowerCase(),
         plan: 'free',
-        createdAt: sbUser?.created_at || new Date().toISOString()
+        createdAt: sbUser.created_at
       };
       return NextResponse.json({
         success: true,
         provider: 'supabase',
         user,
-        token: data.session?.access_token || `token_${Date.now()}`
+        token: data.session.access_token
       });
     }
 
@@ -88,19 +94,25 @@ export async function POST(req: Request) {
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 401 });
       }
+      if (!data.session || !data.user) {
+        return NextResponse.json(
+          { error: 'Supabase authentication failed. No active session established.' },
+          { status: 401 }
+        );
+      }
       const sbUser = data.user;
       return NextResponse.json({
         success: true,
         provider: 'supabase',
         user: {
-          id: sbUser?.id,
-          name: sbUser?.user_metadata?.name || email.split('@')[0],
+          id: sbUser.id,
+          name: sbUser.user_metadata?.name || email.split('@')[0],
           username: email.split('@')[0],
-          email: sbUser?.email || email,
+          email: sbUser.email || email,
           plan: 'free',
-          createdAt: sbUser?.created_at
+          createdAt: sbUser.created_at
         },
-        token: data.session?.access_token
+        token: data.session.access_token
       });
     }
 
@@ -121,18 +133,40 @@ export async function POST(req: Request) {
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
+      if (!data.user) {
+        return NextResponse.json({ error: 'Failed to create user with Supabase.' }, { status: 400 });
+      }
+
+      // If email verification is required by Supabase, no active session is returned immediately
+      if (!data.session) {
+        return NextResponse.json({
+          success: true,
+          provider: 'supabase',
+          requiresEmailConfirmation: true,
+          message: 'Account created successfully. Please check your email to confirm your account before logging in.',
+          user: {
+            id: data.user.id,
+            name: name.trim(),
+            username: email.split('@')[0],
+            email: data.user.email || email.toLowerCase(),
+            plan: 'free',
+            createdAt: data.user.created_at
+          }
+        });
+      }
+
       return NextResponse.json({
         success: true,
         provider: 'supabase',
         user: {
-          id: data.user?.id,
+          id: data.user.id,
           name: name.trim(),
           username: email.split('@')[0],
-          email: email.toLowerCase(),
+          email: data.user.email || email.toLowerCase(),
           plan: 'free',
-          createdAt: data.user?.created_at || new Date().toISOString()
+          createdAt: data.user.created_at
         },
-        token: data.session?.access_token || `token_${Date.now()}`
+        token: data.session.access_token
       });
     }
 
@@ -152,6 +186,10 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ error: 'Invalid authentication action specified.' }, { status: 400 });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error('[AUTH API SERVER ERROR]', err?.message || err);
+    return NextResponse.json(
+      { error: 'An unexpected authentication error occurred. Please try again.' },
+      { status: 500 }
+    );
   }
 }

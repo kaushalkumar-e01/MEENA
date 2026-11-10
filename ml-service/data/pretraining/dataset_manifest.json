@@ -1,0 +1,26 @@
+{
+  "dataset_name": "OpenAssistant OASST1 (English Pretraining Subset)",
+  "source": "https://huggingface.co/datasets/OpenAssistant/oasst1",
+  "license": "Apache 2.0 License",
+  "trees_processed": 1455,
+  "total_conversations": 2931,
+  "split_counts": {
+    "train": {
+      "conversations": 2481,
+      "turns": 3828,
+      "filepath": "ml-service/data/pretraining\\train.jsonl"
+    },
+    "validation": {
+      "conversations": 236,
+      "turns": 364,
+      "filepath": "ml-service/data/pretraining\\val.jsonl"
+    },
+    "test": {
+      "conversations": 214,
+      "turns": 325,
+      "filepath": "ml-service/data/pretraining\\test.jsonl"
+    }
+  },
+  "approx_train_tokens": 1119280,
+  "tokenizer_vocab_size": 3101
+}

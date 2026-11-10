@@ -11,6 +11,7 @@ Implements the Evolved Transformer Decoder block discovered by So et al. (ICML 2
 
 import torch
 import torch.nn as nn
+import torch.utils.checkpoint
 from typing import Optional
 from .config import EvolvedTransformerConfig
 from .modules import (

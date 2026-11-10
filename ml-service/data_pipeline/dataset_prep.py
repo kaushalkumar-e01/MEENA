@@ -244,88 +244,17 @@ def load_external_dataset_files(raw_dir: str) -> List[Dict]:
     return conversations
 
 
-def generate_expanded_conversational_corpus(target_count: int = 500) -> List[Dict]:
+def generate_expanded_conversational_corpus(target_count: Optional[int] = None) -> List[Dict]:
     """
-    Expands canonical human dialogues into a rich multi-turn corpus covering
-    open-domain conversational categories with unique, diverse turns.
+    Returns the rich, curated human conversational corpus covering emotional support,
+    computer science, daily habits, natural science, philosophy, and foreign languages.
+    Completely unique dialogues with zero synthetic tags and zero duplicate targets.
     """
-    corpus = list(CANONICAL_CONVERSATIONS)
-
-    # 40 Diverse dialogue seeds with unique questions, contexts, and mindful answers
-    dialogue_seeds = [
-        # Mindful & Emotional Support
-        ("I'm feeling really anxious about an interview tomorrow.",
-         "It's completely normal to feel nervous before an interview. Acknowledge the butterflies as a sign that you care. What role are you interviewing for?",
-         "It's for a junior software engineer position.",
-         "That's a wonderful opportunity. Remember that interviews are two-way conversations to see if you and the team are a good match. Focus on explaining your thought process clearly and asking questions about their engineering culture."),
-
-        ("I have been procrastinating all day and feeling guilty.",
-         "Guilt often makes procrastination worse by adding emotional weight to tasks. Instead of being harsh with yourself, pause and reset. What is one tiny five-minute action you can take right now?",
-         "I need to reply to three important emails.",
-         "Pick just the easiest of the three. Open a blank draft, write a two-sentence reply, and send it. Once that momentum begins, the rest will feel much lighter."),
-
-        # Daily Life & Habits
-        ("What are some simple ways to improve my daily focus?",
-         "A few proven strategies: 1) Work in timed intervals like 25-minute Pomodoro sessions, 2) Keep your workspace physically clutter-free, 3) Put your phone in another room or on Do Not Disturb, and 4) Stay hydrated throughout the day.",
-         "Which technique should I start with today?",
-         "Start with the 25-minute Pomodoro timer. Commit to just one single task for 25 minutes without opening new browser tabs or looking at notifications."),
-
-        ("How do I establish a healthy evening routine?",
-         "Design your evening routine around calming your nervous system: dim harsh overhead lighting, disconnect from bright screens at least 30 minutes before sleep, and engage in a calming ritual like reading, gentle stretching, or listening to tranquil music.",
-         "Should I avoid eating close to bedtime?",
-         "Yes, ideally finish substantial meals 2 to 3 hours before sleeping so your body can focus on cellular restoration rather than active digestion."),
-
-        # Language Learning & Culture
-        ("How can I become fluent in a new language faster?",
-         "Immerse yourself daily in comprehensible input. Instead of memorizing isolated vocabulary lists, listen to native podcasts, read short stories, and practice speaking aloud in full sentences every single day.",
-         "What if I make mistakes when speaking?",
-         "Mistakes are essential proof of learning. Native speakers appreciate the effort and usually understand your meaning. Treat each error as useful feedback rather than failure."),
-
-        ("Can we practice basic conversational German?",
-         "Gerne! (With pleasure!) Wie geht es dir heute und was machst du Schönes? (How are you today and what nice things are you doing?)",
-         "Mir geht es gut, danke! Ich lerne gerade Deutsch und trinke Kaffee.",
-         "Sehr gut! Dein Satz ist absolut fehlerfrei. Welches Buch oder Thema interessiert dich beim Deutschlernen am meisten?"),
-
-        # Computer Science & Technology
-        ("What is the difference between synchronous and asynchronous programming?",
-         "In synchronous programming, tasks execute sequentially—each operation must finish before the next one starts, potentially blocking execution during slow I/O operations. In asynchronous programming, long-running operations execute in the background, allowing the main program to continue running and handle other events.",
-         "When should I prefer asynchronous code?",
-         "Asynchronous patterns are ideal for I/O-bound tasks: making HTTP API requests, querying databases, reading files from disk, or managing thousands of concurrent websocket connections."),
-
-        ("Explain what an API is in simple terms.",
-         "An API (Application Programming Interface) is like a restaurant menu. The menu lists dishes you can order and specifies what you get in return. You don't need to know how the kitchen prepares the food; you just order from the menu and the waiter brings it. In software, an API lets two applications communicate using standardized requests and responses.",
-         "What is the difference between REST and GraphQL?",
-         "REST provides fixed endpoints where each URL returns a predefined set of data. GraphQL provides a single endpoint where the client can request exactly the specific fields it needs, preventing over-fetching or under-fetching."),
-
-        # Science & Nature
-        ("How do airplanes generate lift to stay in the air?",
-         "Airplanes generate lift primarily through their wings (airfoils) moving through air. As the wing moves forward, air flows faster over the curved upper surface than the flatter lower surface, creating lower pressure above the wing and higher pressure below it (Bernoulli's principle) alongside downward air deflection (Newton's third law).",
-         "Why do commercial airplanes fly so high, around 35,000 feet?",
-         "At high altitudes, the atmosphere is much thinner, which significantly reduces aerodynamic drag. This allows jet engines to propel the aircraft much faster while burning less fuel per mile."),
-
-        ("What is photosynthesis and why is it vital for Earth?",
-         "Photosynthesis is the biochemical process by which green plants, algae, and cyanobacteria convert sunlight, carbon dioxide, and water into glucose sugar and oxygen gas. It forms the foundational energy source for nearly all terrestrial food chains and maintains the oxygen content of Earth's atmosphere.",
-         "Where inside the plant cell does this take place?",
-         "Photosynthesis takes place inside specialized microscopic organelles called chloroplasts, which contain the green pigment chlorophyll that captures light photons.")
-    ]
-
-    seed_idx = 0
-    while len(corpus) < target_count:
-        u1, a1, u2, a2 = dialogue_seeds[seed_idx % len(dialogue_seeds)]
-        variant = seed_idx // len(dialogue_seeds)
-        conv_id = f"seed_conv_{seed_idx:04d}_v{variant}"
-        corpus.append({
-            "id": conv_id,
-            "turns": [
-                ("user", u1 if variant == 0 else f"{u1} (Context update #{variant})"),
-                ("assistant", a1),
-                ("user", u2),
-                ("assistant", a2)
-            ]
-        })
-        seed_idx += 1
-
-    return corpus
+    from .curated_dialogues import CURATED_CONVERSATIONS, expand_curated_conversations
+    all_convs = expand_curated_conversations(CURATED_CONVERSATIONS)
+    if target_count and len(all_convs) > target_count:
+        return all_convs[:target_count]
+    return all_convs
 
 
 def build_conversation_turns(

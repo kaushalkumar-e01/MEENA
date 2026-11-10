@@ -33,6 +33,7 @@ dist/
 # Generated ML data, tokenizer artifacts, and checkpoints
 ml-service/data/raw/
 ml-service/data/processed/
+ml-service/data/pretraining/*.jsonl
 ml-service/data/tokenizer/*
 !ml-service/data/tokenizer/tokenizer_config.json
 ml-service/checkpoints/

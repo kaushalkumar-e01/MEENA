@@ -1,4 +1,7 @@
 import os
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
 import json
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -11,7 +14,7 @@ from sklearn.metrics import classification_report, accuracy_score, f1_score
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 app = FastAPI(title="MEENA Machine Learning Service", version="1.0.0")
 
@@ -208,6 +211,27 @@ class MetricsResponse(BaseModel):
     knowledge_entries_indexed: int
     cluster_count: int
 
+
+class MeenaGenerateRequest(BaseModel):
+    prompt: str
+    history: Optional[List[Dict[str, str]]] = None
+    temperature: Optional[float] = 0.65
+    top_k: Optional[int] = 40
+    top_p: Optional[float] = 0.9
+    repetition_penalty: Optional[float] = 1.35
+    no_repeat_ngram_size: Optional[int] = 3
+    max_new_tokens: Optional[int] = 45
+
+
+class MeenaGenerateResponse(BaseModel):
+    response: str
+    tokens_generated: int
+    is_fallback: bool
+    model: str
+    device: str
+    vram_mb: Optional[float] = None
+    checkpoint: str
+
 # ---------------------------------------------------------
 # 3. API Endpoints
 # ---------------------------------------------------------
@@ -307,6 +331,42 @@ def get_model_metrics():
         knowledge_entries_indexed=len(KNOWLEDGE_BASE),
         cluster_count=4
     )
+
+@app.post("/ml/meena-generate", response_model=MeenaGenerateResponse)
+def generate_meena_response(payload: MeenaGenerateRequest):
+    try:
+        from meena_inference import MeenaInferenceEngine
+        engine = MeenaInferenceEngine.get_instance()
+        result = engine.generate(
+            prompt=payload.prompt,
+            history=payload.history,
+            max_new_tokens=payload.max_new_tokens or 45,
+            temperature=payload.temperature or 0.65,
+            top_k=payload.top_k or 40,
+            top_p=payload.top_p or 0.9,
+            repetition_penalty=payload.repetition_penalty or 1.35,
+            no_repeat_ngram_size=payload.no_repeat_ngram_size or 3
+        )
+        return MeenaGenerateResponse(
+            response=result["response"],
+            tokens_generated=result["tokens_generated"],
+            is_fallback=result["is_fallback"],
+            model=result["model"],
+            device=result["device"],
+            vram_mb=result["vram_mb"],
+            checkpoint=result["checkpoint"]
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/ml/meena-status")
+def get_meena_status():
+    try:
+        from meena_inference import MeenaInferenceEngine
+        engine = MeenaInferenceEngine.get_instance()
+        return engine.get_status()
+    except Exception as e:
+        return {"status": "uninitialized", "error": str(e)}
 
 if __name__ == "__main__":
     import uvicorn

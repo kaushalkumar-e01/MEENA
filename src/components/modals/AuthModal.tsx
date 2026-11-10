@@ -83,8 +83,18 @@ export function AuthModal({ isOpen, onSuccess, onClose }: AuthModalProps) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Registration failed');
 
-      authService.setSession(data.user, data.token);
-      onSuccess(data.user);
+      if (data.requiresEmailConfirmation) {
+        setSuccessMsg(data.message || 'Please check your email to confirm your account.');
+        setTab('login');
+        return;
+      }
+
+      if (data.user && data.token) {
+        authService.setSession(data.user, data.token);
+        onSuccess(data.user);
+      } else {
+        throw new Error('Supabase session could not be established.');
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {

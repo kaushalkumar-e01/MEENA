@@ -217,9 +217,10 @@ class MultiHeadAttention(nn.Module):
         scores = torch.matmul(q, k.transpose(-2, -1)) * self.scale
 
         # 3. Apply Attention Mask (e.g. causal upper-triangular mask)
+        fill_val = -1e4 if scores.dtype == torch.float16 else -1e9
         if attn_mask is not None:
             if attn_mask.dtype == torch.bool:
-                scores = scores.masked_fill(attn_mask, -1e9)
+                scores = scores.masked_fill(attn_mask, fill_val)
             else:
                 scores = scores + attn_mask
 
@@ -227,7 +228,7 @@ class MultiHeadAttention(nn.Module):
         if key_padding_mask is not None:
             # key_padding_mask: [batch, src_len] -> [batch, 1, 1, src_len]
             mask_expanded = key_padding_mask.unsqueeze(1).unsqueeze(2)
-            scores = scores.masked_fill(mask_expanded, -1e9)
+            scores = scores.masked_fill(mask_expanded, fill_val)
 
         # 5. Softmax & Dropout
         attn_weights = F.softmax(scores, dim=-1)

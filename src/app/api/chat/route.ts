@@ -19,6 +19,74 @@ export async function POST(req: Request) {
 
     const lastUserMessage = messages[messages.length - 1]?.content || '';
 
+    // 1. Primary Engine: MEENA Neural Evolved Transformer (1 Encoder + 13 Decoders)
+    // Runs the genuine trained PyTorch conversational model via the ML microservice
+    const mlServiceUrl = process.env.ML_SERVICE_URL || 'http://127.0.0.1:8000';
+    let neuralReply: string | null = null;
+    let neuralMeta: any = null;
+
+    try {
+      const mlController = new AbortController();
+      const timeoutId = setTimeout(() => mlController.abort(), 8000);
+
+      const historyTurns = messages.slice(0, -1).map((m: any) => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content
+      }));
+
+      const mlRes = await fetch(`${mlServiceUrl}/ml/meena-generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: lastUserMessage,
+          history: historyTurns,
+          temperature: 0.65,
+          top_k: 40,
+          top_p: 0.9,
+          repetition_penalty: 1.35,
+          no_repeat_ngram_size: 3
+        }),
+        signal: mlController.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (mlRes.ok) {
+        const mlData = await mlRes.json();
+        if (mlData && mlData.response) {
+          neuralReply = mlData.response;
+          neuralMeta = mlData;
+        }
+      }
+    } catch (mlErr: any) {
+      console.warn('[MEENA NEURAL SERVICE UNAVAILABLE, USING SECONDARY ENGINE]', mlErr.message);
+    }
+
+    if (neuralReply) {
+      const encoder = new TextEncoder();
+      const words = neuralReply.split(' ');
+
+      const readable = new ReadableStream({
+        async start(controller) {
+          for (let i = 0; i < words.length; i++) {
+            const chunk = words[i] + (i === words.length - 1 ? '' : ' ');
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: chunk, model: neuralMeta?.model })}\n\n`));
+            await new Promise((r) => setTimeout(r, 20));
+          }
+          controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+          controller.close();
+        }
+      });
+
+      return new Response(readable, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'X-Meena-Model': 'Evolved-Transformer-1Enc-13Dec'
+        }
+      });
+    }
+
     const fullSystemInstruction = `
 ${MEENA_SYSTEM_PROMPT}
 
