@@ -1,0 +1,64 @@
+# Secrets and local environment files
+.env
+.env.*
+!.env.example
+
+# Duplicate nested project snapshot
+/MEENA/
+
+# JavaScript / Next.js
+node_modules/
+.next/
+out/
+build/
+coverage/
+.turbo/
+.vercel/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+.python-version.local
+pip-wheel-metadata/
+*.egg-info/
+dist/
+
+# Generated ML data, tokenizer artifacts, and checkpoints
+ml-service/data/raw/
+ml-service/data/processed/
+ml-service/data/tokenizer/*
+!ml-service/data/tokenizer/tokenizer_config.json
+ml-service/checkpoints/
+ml-service/outputs/
+checkpoints/
+*.ckpt
+*.safetensors
+*.pt
+*.pth
+*.onnx
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.orig
+*.cache
+*.tsbuildinfo
+
+# IDE and operating system files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+Desktop.ini
